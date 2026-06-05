@@ -1,5 +1,4 @@
 return {
-  -- Stop pyright from spamming messages while typing
   {
     "neovim/nvim-lspconfig",
     opts = {
@@ -7,18 +6,18 @@ return {
         update_in_insert = false,
       },
       servers = {
-        pyright = {
-          handlers = {
-            ["$/progress"] = function() end,
-            ["window/showMessage"] = function() end,
-          },
-        },
-        basedpyright = {
-          handlers = {
-            ["$/progress"] = function() end,
-            ["window/showMessage"] = function() end,
-          },
-        },
+        -- Python: Node.js pyright replaced by Rust ty.
+        -- ty is a new-style server; enabled via vim.lsp.enable() in autocmds.lua
+        pyright = { enabled = false },
+        basedpyright = { enabled = false },
+
+        -- JSON: vscode-json-language-server is Node.js; treesitter covers syntax.
+        -- SchemaStore.nvim stays installed but goes dormant — no harm.
+        jsonls = { enabled = false },
+
+        -- YAML: yaml-language-server is Node.js.
+        -- Re-enable if you need schema validation for K8s / GitHub Actions files.
+        yamlls = { enabled = false },
       },
     },
   },
