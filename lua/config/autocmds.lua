@@ -22,3 +22,13 @@ vim.lsp.config("rlsp-yaml", {
   },
 })
 vim.lsp.enable("rlsp-yaml")
+
+-- shuck: Rust shell (bash/sh) linter/formatter/LSP, replaces Node
+-- bash-language-server (disabled in overrides.lua).
+-- Install: cargo install shuck-cli  (binary is `shuck`, subcommand `server`)
+vim.lsp.config("shuck", {
+  cmd = { "shuck", "server" },
+  filetypes = { "sh", "bash" },
+  root_markers = { ".git" },
+})
+vim.lsp.enable("shuck")
