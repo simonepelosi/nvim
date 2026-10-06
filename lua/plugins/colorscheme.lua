@@ -1,14 +1,16 @@
 return {
   {
-    "bluz71/vim-moonfly-colors",
-    name = "moonfly",
+    "uhs-robert/oasis.nvim",
     lazy = false,
     priority = 1000,
+    config = function()
+      require("oasis").setup()
+    end,
   },
   {
     "LazyVim/LazyVim",
     opts = {
-      colorscheme = "moonfly",
+      colorscheme = "oasis-starlight",
     },
   },
 }
