@@ -20,6 +20,8 @@ vim.g.loaded_python3_provider = 0
 -- so pure-YAML LSPs (rlsp-yaml) don't emit false syntax errors on Juju/Mojo bundle.yaml templates.
 vim.filetype.add({
   extension = {
+    tf = "terraform",
+    tfvars = "terraform-vars",
     j2 = "jinja",
     jinja = "jinja",
     jinja2 = "jinja",

@@ -125,6 +125,73 @@ return {
             },
           },
         },
+
+        -- Terraform / HCL: terraform-ls handles LSP, validation, and formatting in-process
+        terraformls = {
+          init_options = {
+            terraform = {
+              path = vim.fn.expand("~/.local/bin/terraform-ls-tf"),
+            },
+            experimentalFeatures = {
+              validateOnSave = false, -- avoid spawning heavy `terraform validate` on save
+              prefillRequiredFields = true,
+            },
+          },
+          keys = {
+            {
+              "gd",
+              function()
+                local c = vim.lsp.get_clients({ bufnr = 0, name = "terraformls" })[1]
+                if c then
+                  local params = vim.lsp.util.make_position_params(0, c.offset_encoding)
+                  local resp = c:request_sync("textDocument/definition", params, 600, 0)
+                  if resp and resp.result and not vim.tbl_isempty(resp.result) then
+                    vim.lsp.util.show_document(resp.result[1], c.offset_encoding, { focus = true })
+                    return
+                  end
+                end
+                -- Fallback for uninitialized directories (no .terraform) or "${local.foo}" strings:
+                -- search for `variable "word"`, `output "word"`, `resource "..." "word"`, `data "..." "word"`, or `word =` across *.tf in module dir
+                local is_kw = vim.bo.iskeyword
+                vim.bo.iskeyword = is_kw .. ",-"
+                local word = vim.fn.expand("<cword>")
+                vim.bo.iskeyword = is_kw
+                if word == "" then
+                  return
+                end
+                local dir = vim.fn.expand("%:p:h")
+                local tf_files = vim.fn.globpath(dir, "*.tf", false, true)
+                local esc = vim.pesc(word)
+                local patterns = {
+                  '^%s*variable%s+"' .. esc .. '"',
+                  '^%s*resource%s+"[^"]+"%s+"' .. esc .. '"',
+                  '^%s*data%s+"[^"]+"%s+"' .. esc .. '"',
+                  '^%s*module%s+"' .. esc .. '"',
+                  '^%s*output%s+"' .. esc .. '"',
+                  "^%s*" .. esc .. "%s*=",
+                }
+                for _, pat in ipairs(patterns) do
+                  for _, file in ipairs(tf_files) do
+                    local lines = vim.fn.readfile(file)
+                    for lnum, line in ipairs(lines) do
+                      if line:find(pat) then
+                        vim.cmd("normal! m'")
+                        if vim.fn.fnamemodify(file, ":p") ~= vim.api.nvim_buf_get_name(0) then
+                          vim.cmd.edit(vim.fn.fnameescape(file))
+                        end
+                        local col = (line:find(esc) or 1) - 1
+                        vim.api.nvim_win_set_cursor(0, { lnum, col })
+                        return
+                      end
+                    end
+                  end
+                end
+              end,
+              desc = "Goto Terraform Definition",
+            },
+          },
+          on_attach = function() end, -- prevent default codelens auto-enable
+        },
       },
     },
   },
@@ -141,6 +208,10 @@ return {
         sh = {}, -- handled by shuck LSP
         go = {}, -- handled in-process by gopls (gofumpt = true)
         rust = { "rustfmt" },
+        terraform = {}, -- handled in-process by terraform-ls
+        tf = {},
+        ["terraform-vars"] = {},
+        hcl = {},
       },
     },
   },
@@ -248,7 +319,7 @@ for stage in stages:
   {
     "nvim-treesitter/nvim-treesitter",
     opts = {
-      ensure_installed = { "rust", "ron", "jinja", "jinja_inline" },
+      ensure_installed = { "rust", "ron", "jinja", "jinja_inline", "terraform", "hcl" },
     },
   },
 
@@ -277,6 +348,7 @@ for stage in stages:
         "rumdl",
         "dprint",
         "golangci-lint",
+        "terraform-ls",
       })
       opts.ensure_installed = vim.tbl_filter(function(name)
         return not vim.tbl_contains(exclude, name)
