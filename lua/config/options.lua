@@ -45,14 +45,11 @@ vim.filetype.add({
 })
 
 -- Zero-RAM Jinja2 + YAML Treesitter highlighting & navigation (`gd`, `gr`, `%`)
-vim.api.nvim_create_autocmd("FileType", {
-  pattern = "jinja",
-  callback = function(ev)
-    local bufnr = ev.buf
-    pcall(vim.treesitter.start, bufnr, "jinja")
+local function set_jinja_keymaps(bufnr)
+  pcall(vim.treesitter.start, bufnr, "jinja")
 
-    -- `gd`: Goto first Jinja `{% set var = ... %}` definition (fallback: first occurrence)
-    vim.keymap.set("n", "gd", function()
+  -- `gd`: Goto first Jinja `{% set var = ... %}` definition (fallback: first occurrence)
+  vim.keymap.set("n", "gd", function()
       local word = vim.fn.expand("<cword>")
       if word == "" then
         return
@@ -90,7 +87,7 @@ vim.api.nvim_create_autocmd("FileType", {
       if word ~= "" and Snacks and Snacks.picker then
         Snacks.picker.lines({ search = word })
       end
-    end, { buffer = bufnr, desc = "Jinja Variable References (Buffer)" })
+    end, { buffer = bufnr, nowait = true, desc = "Jinja Variable References (Buffer)" })
 
     -- `%`: Jump between Jinja `if -> elif -> else -> endif` when on a `{% ... %}` line
     vim.keymap.set("n", "%", function()
@@ -142,5 +139,12 @@ vim.api.nvim_create_autocmd("FileType", {
         vim.cmd("normal! %")
       end
     end, { buffer = bufnr, desc = "Jump Jinja Block (if/elif/else/endif)" })
+end
+
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "jinja",
+  callback = function(ev)
+    set_jinja_keymaps(ev.buf)
   end,
 })
+

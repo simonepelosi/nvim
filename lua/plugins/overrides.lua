@@ -8,6 +8,11 @@ return {
       inlay_hints = { enabled = false },
       codelens = { enabled = false },
       servers = {
+        ["*"] = {
+          keys = {
+            { "gr", function() Snacks.picker.lsp_references() end, nowait = true, desc = "References", has = "references" },
+          },
+        },
         -- Disable Node.js, .NET (C#), and heavy C++/Lua servers
         pyright = { enabled = false },
         basedpyright = { enabled = false },
