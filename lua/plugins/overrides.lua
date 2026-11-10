@@ -43,7 +43,14 @@ return {
           cmd = { "rlsp-yaml" },
           filetypes = { "yaml", "yaml.docker-compose", "yaml.gitlab" },
           root_markers = { ".git" },
-          init_options = { schemaStore = true },
+          init_options = {
+            schemaStore = true,
+            flowStyle = "off", -- allow inline `{ from: x, to: y }` flow mappings without warning spam
+          },
+          settings = {
+            schemaStore = true,
+            flowStyle = "off",
+          },
         },
 
         -- Shell/Bash: shuck (Rust linter/formatter/LSP, installed via cargo in ~/.cargo/bin)
@@ -133,14 +140,15 @@ return {
     },
   },
 
-  -- Disable linting on save; run golangci-lint ONLY in repos with .golangci.* config
+  -- Disable linting on save; run golangci-lint (Go) and check_bundles (Mojo Jinja YAML) conditionally
   {
     "mfussenegger/nvim-lint",
     opts = {
-      events = { "BufReadPost", "InsertLeave" },
+      events = { "BufReadPost", "InsertLeave", "BufWritePost" },
       linters_by_ft = {
         markdown = {}, -- handled by rumdl LSP in Rust
         go = { "golangcilint" },
+        jinja = { "mojo_check_bundles" },
       },
       linters = {
         golangcilint = {
@@ -151,6 +159,82 @@ return {
             )[1] ~= nil
           end,
         },
+        mojo_check_bundles = {
+          cmd = "python3",
+          stdin = true,
+          append_fname = false,
+          stream = "both",
+          ignore_exitcode = true,
+          condition = function(ctx)
+            return vim.fn.fnamemodify(ctx.filename, ":t") == "bundle.yaml"
+              and vim.fs.find({ "check_bundles.py" }, { path = ctx.filename, upward = true })[1] ~= nil
+          end,
+          args = {
+            "-c",
+            [[
+import re, sys, yaml
+from pathlib import Path
+from jinja2 import Environment, FileSystemLoader, TemplateError
+
+bundle = Path(sys.argv[1]).resolve()
+spec_dir = bundle.parent
+root_dir = spec_dir.parent
+sys.path.insert(0, str(root_dir))
+
+content = sys.stdin.read()
+stages = sorted(set(re.findall(r'stage_name\s*==\s*"([^"]+)"', content)) | {"devel"})
+
+try:
+    env = Environment(loader=FileSystemLoader(str(spec_dir)))
+    tmpl = env.from_string(content)
+except TemplateError as e:
+    line = getattr(e, "lineno", 1) or 1
+    print(f"{line}:1:error:Jinja2 syntax error: {e}")
+    sys.exit(0)
+
+check_mod = None
+if (root_dir / "check_bundles.py").exists():
+    import check_bundles as check_mod
+
+for stage in stages:
+    try:
+        rendered = tmpl.render({"charm_dir": "fake-charm-dir", "stage_name": stage, "local_dir": "fake-local-dir"})
+        yaml.safe_load(rendered)
+    except Exception as e:
+        line = getattr(getattr(e, "problem_mark", None), "line", 0) + 1
+        col = getattr(getattr(e, "problem_mark", None), "column", 0) + 1
+        print(f"{line}:{col}:error:[stage={stage}] YAML/Jinja render error: {e}")
+        break
+    if check_mod:
+        for err in check_mod.validate_build_labels(spec_dir.name, stage, rendered):
+            lnum = 1
+            for idx, l in enumerate(content.splitlines(), 1):
+                if "build_label:" in l:
+                    lnum = idx
+                    break
+            print(f"{lnum}:1:error:{err}")
+]],
+            function()
+              return vim.api.nvim_buf_get_name(0)
+            end,
+          },
+          parser = function(output)
+            local diags = {}
+            for line in output:gmatch("[^\r\n]+") do
+              local lnum, col, msg = line:match("^(%d+):(%d+):error:(.+)$")
+              if lnum and msg then
+                table.insert(diags, {
+                  lnum = math.max(0, tonumber(lnum) - 1),
+                  col = math.max(0, tonumber(col) - 1),
+                  severity = vim.diagnostic.severity.ERROR,
+                  source = "check_bundles",
+                  message = msg,
+                })
+              end
+            end
+            return diags
+          end,
+        },
       },
     },
   },
@@ -159,7 +243,7 @@ return {
   {
     "nvim-treesitter/nvim-treesitter",
     opts = {
-      ensure_installed = { "rust", "ron" },
+      ensure_installed = { "rust", "ron", "jinja", "jinja_inline" },
     },
   },
 
